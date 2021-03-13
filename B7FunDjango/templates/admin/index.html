@@ -1,0 +1,5 @@
+{% extends "admin/index.html" %}
+{% block userlinks %}
+    {{block.super}}
+    <a href="{% url 'adminStats:show_stats_no_year' %}">/ Statistics /</a>
+{% endblock %}

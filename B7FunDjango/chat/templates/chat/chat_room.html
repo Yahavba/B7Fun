@@ -1,0 +1,251 @@
+{% extends 'baseWithNav.html' %}
+{% block  content%}
+    <div class="container d-flex flex-column h-100 flex-wrap">
+        <div class="flex-grow-1"></div>
+        <div class="row justify-content-center mt-1">
+            <div class="p-1 w-100 bg-dark text-white">
+                <h3 class="text-center">{{room_description}}</h3>
+            </div>
+            <div id="chat-log" style="height: 600px; max-height: 100%; overflow-y: auto;" class="p-1 w-100 bg-dark text-white">
+                <div id="chat-scroll-down"></div>
+            </div>
+            <div class="input-group mb-3">
+                <div class="input-group-prepend">
+                    <button id="chat-message-submit" class="btn btn-primary" type="button" value="Send" dir="rtl">שלח/י</button>
+                </div>
+                <input id="chat-message-input" type="text" class="form-control" placeholder="תוכן הודעה" aria-label="תוכן הודעה" aria-describedby="basic-addon1" dir="rtl">
+            </div>
+        </div>
+        <div class="flex-grow-1"></div>       
+    </div>
+    {{ room_type|json_script:"room-type" }}
+    {{ room_id|json_script:"room-id" }}
+    {{ user.email|json_script:"user-email"}}
+    <script>
+        let indexOfMessages = 0;
+        const user_email = JSON.parse(document.getElementById('user-email').textContent);
+        let no_more_messages = false;
+
+        const roomType = JSON.parse(document.getElementById('room-type').textContent);
+        const roomID = JSON.parse(document.getElementById('room-id').textContent);
+        
+        const chatSocket = new WebSocket( 'ws://' + window.location.host + '/ws/chat/' + roomType + '/' + roomID + '/');
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            if(data.command == 'fetch_messages'){
+                no_more_messages = data.messages.length  == 0;
+                let first_elem = null;
+                if(!data.scroll_to_end){
+                    first_elem = $("#chat-log").children().first();
+                }
+                Array.prototype.forEach.call(data.messages, function(elem){
+                    if(user_email == elem.sender){
+                        user_profile_link = "{% url 'Profile:my_profile' %}";
+                        $("#chat-log").prepend(
+                            `<div class="row w-75 bg-light mr-1 mb-1 text-dark rounded pull-right message-element">
+                                <table class="table bg-light">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" class="border-0 d-row d-flex">
+                                                <div class="mr-2"> 
+                                                    <a class="nav-link p-0" href="${user_profile_link}" title="${elem.user_name}">
+                                                        <img src="/media/${elem.profile_image}" class="rounded-circle z-depth-0" alt="avatar image" height="35">
+                                                    </a>
+                                                </div>
+                                                <div class="w-100"> 
+                                                    <p dir="rtl" class="text-right message-content">${elem.message}</p>
+                                                    <p style="display:none;" class="sender_email">${elem.sender}</p>
+                                                    <p style="display:none;" class="message_id">${elem.message_id}</p>  
+                                                </div>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <th scope="row" class="border-0 pr-0 pt-0 pb-0"><small class="text-muted pull-left"> ${elem.date} ${elem.time}</small></p></th>
+                                            <th scope="row" class="border-0 pl-0 pt-0 pb-0 text-muted pull-right"><i class="fa fa-frown-o text-primary report" style="cursor:pointer;" title="דווח על הודעה פוגענית"></th>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>`
+                        ); 
+                    }
+                    else{
+                        user_profile_link = "{% url 'Profile:show_user_profile_no_arg' %}" + elem.sender;
+                        $("#chat-log").prepend(
+                            `<div class="row w-75 bg-light ml-1 mb-1 text-dark rounded pull-left message-element">
+                                <table class="table bg-light">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" class="border-0 d-row d-flex">
+                                                <div class="mr-2"> 
+                                                    <a class="nav-link p-0" href="${user_profile_link}" title="${elem.user_name}">
+                                                        <img src="/media/${elem.profile_image}" class="rounded-circle z-depth-0" alt="avatar image" height="35">
+                                                    </a>
+                                                </div>
+                                                <div class="w-100"> 
+                                                    <p dir="rtl" class="text-right message-content">${elem.message}</p>
+                                                    <p style="display:none;" class="sender_email">${elem.sender}</p>
+                                                    <p style="display:none;" class="message_id">${elem.message_id}</p>
+                                                </div>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <th scope="row" class="border-0 pr-0 pt-0 pb-0"><small class="text-muted pull-left"> ${elem.date} ${elem.time}</small></p></th>
+                                            <th scope="row" class="border-0 pl-0 pt-0 pb-0 text-muted pull-right"><i class="fa fa-frown-o text-primary report" style="cursor:pointer;" title="דווח על הודעה פוגענית"></th>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>`
+                        ); 
+                    }
+                       
+                });
+                if(data.scroll_to_end){
+                    ScrollToEnd();
+                }
+                else{
+                    var previous_height = 0;
+                    first_elem.prevAll().each(function() {
+                        previous_height += $(this).outerHeight();
+                    });
+                    $("#chat-log").scrollTop(previous_height);
+                }
+            }
+            else if(data.command == 'new_messages'){
+                if(user_email == data.sender){
+                    user_profile_link = "{% url 'Profile:my_profile' %}";
+                    $("#chat-scroll-down").before(
+                        `<div class="row w-75 bg-light mr-1 mb-1 text-dark rounded pull-right message-element">
+                            <table class="table bg-light">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="border-0 d-row d-flex">
+                                            <div class="mr-2"> 
+                                                <a class="nav-link p-0" href="${user_profile_link}" title="${data.user_name}">
+                                                    <img src="/media/${data.profile_image}" class="rounded-circle z-depth-0" alt="avatar image" height="35">
+                                                </a>
+                                            </div>
+                                            <div class="w-100"> 
+                                                <p dir="rtl" class="text-right message-content">${data.message}</p>
+                                                <p style="display:none;" class="sender_email">${data.sender}</p>
+                                                <p style="display:none;" class="message_id">${data.message_id}</p>  
+                                            </div>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <th scope="row" class="border-0 pr-0 pt-0 pb-0"><small class="text-muted pull-left"> ${data.date} ${data.time}</small></p></th>
+                                        <th scope="row" class="border-0 pl-0 pt-0 pb-0 text-muted pull-right"><i class="fa fa-frown-o text-primary report" style="cursor:pointer;" title="דווח על הודעה פוגענית"></th>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>`
+                    );
+                }
+                else{
+                    user_profile_link = "{% url 'Profile:show_user_profile_no_arg' %}" + data.sender;
+                    $("#chat-scroll-down").before(
+                        `<div class="row w-75 bg-light ml-1 mb-1 text-dark rounded pull-left message-element">
+                            <table class="table bg-light">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="border-0 d-row d-flex">
+                                            <div class="mr-2"> 
+                                                <a class="nav-link p-0" href="${user_profile_link}" title="${data.user_name}">
+                                                    <img src="/media/${data.profile_image}" class="rounded-circle z-depth-0" alt="avatar image" height="35">
+                                                </a>
+                                            </div>
+                                            <div class="w-100"> 
+                                                <p dir="rtl" class="text-right message-content">${data.message}</p>
+                                                <p style="display:none;" class="sender_email">${data.sender}</p>
+                                                <p style="display:none;" class="message_id">${data.message_id}</p> 
+                                            </div>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <th scope="row" class="border-0 pr-0 pt-0 pb-0"><small class="text-muted pull-left"> ${data.date} ${data.time}</small></p></th>
+                                        <th scope="row" class="border-0 pl-0 pt-0 pb-0 text-muted pull-right"><i class="fa fa-frown-o text-primary report" style="cursor:pointer;" title="דווח על הודעה פוגענית"></th>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>`
+                    );
+                }
+                ScrollToEnd();
+            }
+            $(".report").click(submit_chat_abusive_report);
+        };
+
+        chatSocket.onopen = function(e) {
+            chatSocket.send(JSON.stringify({
+                'command': 'fetch_messages',
+                'index': indexOfMessages,
+                'scroll_to_end': true
+            }));
+            indexOfMessages += 1;
+            $('#chat-log').scroll(function() {
+                if(!no_more_messages){
+                    var pos = $('#chat-log').scrollTop();
+                    if (pos == 0) {
+                        chatSocket.send(JSON.stringify({
+                            'command': 'fetch_messages',
+                            'index': indexOfMessages,
+                            'scroll_to_end': false
+                        }));
+                        indexOfMessages += 1;
+                    }
+                }
+            });
+        };
+
+        chatSocket.onclose = function(e) {
+            window.alert('Invalid Chat please contact site administration if problem returns');
+            window.location = "{% url 'feed:feed' %}"
+        };
+
+        document.querySelector('#chat-message-input').onkeyup = function(e) {
+            if (e.keyCode === 13) {  // enter, return
+                document.querySelector('#chat-message-submit').click();
+            }
+        };
+
+        document.querySelector('#chat-message-submit').onclick = function(e) {
+            const messageInputDom = document.querySelector('#chat-message-input');
+            const message = messageInputDom.value;
+            chatSocket.send(JSON.stringify({
+                'message': message,
+                'command': 'new_messages'
+            }));
+            messageInputDom.value = '';
+        };
+
+        function ScrollToEnd() {
+            // Scroll
+            $("#chat-log").animate({
+                scrollTop: $('#chat-log').prop("scrollHeight")
+            }, 1000);
+        }
+
+
+        function submit_chat_abusive_report(event){
+            let message = $(this).closest('.message-element').find('.message-content').text();
+            let sender = $(this).closest('.message-element').find('.sender_email').text();
+            let message_id = $(this).closest('.message-element').find('.message_id').text();
+            chatSocket.send(JSON.stringify({
+                'command': 'report_message',
+                'message': message,
+                'sender_email': sender,
+                'message_id': message_id
+            }));
+            window.alert("Message was reported!");
+            event.stopPropagation()
+        }
+    </script>
+{% endblock  %}
